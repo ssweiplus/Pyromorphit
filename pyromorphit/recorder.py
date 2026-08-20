@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 from .models import TestSession, Turn
 
 
+def _json_default(value):
+    if is_dataclass(value):
+        return asdict(value)
+    return str(value)
+
+
 def _dump(data) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+    return json.dumps(data, ensure_ascii=False, indent=2, default=_json_default)
 
 
 class SessionRecorder:
