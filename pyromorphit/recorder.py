@@ -47,6 +47,11 @@ class SessionRecorder:
         (base / "tree.json").write_text(_dump(tree), encoding="utf-8")
         self._write_summary(session, base)
 
+    def append_event(self, event: dict, session: TestSession) -> None:
+        base = self.session_dir(session)
+        with (base / "events.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, default=_json_default) + "\n")
+
     def save_turn(self, session: TestSession, turn: Turn) -> None:
         base = self.session_dir(session) / "turns" / f"turn-{turn.id:03d}"
         base.mkdir(parents=True, exist_ok=True)
