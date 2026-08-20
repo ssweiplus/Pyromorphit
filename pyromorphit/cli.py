@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from .llm import provider_from_env
-from .models import HumanFeedback, Objective, OperatorAction
+from .models import HumanFeedback, Objective, OperatorAction, SessionState
 from .orchestrator import Orchestrator
 from .recorder import SessionRecorder
 from .skills import SkillLoader
@@ -78,7 +78,7 @@ def main() -> None:
 
         command = input("\nNext action [continue/branch/stop]: ").strip().lower() or "continue"
         if command == "stop":
-            session.state = "STOPPED"
+            session.state = SessionState.STOPPED
             orchestrator.recorder.save_session(session)
             break
         if command == "branch":
