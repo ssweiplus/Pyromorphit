@@ -1,48 +1,82 @@
 # Pyromorphit
 
-Pyromorphit is a human-in-the-loop red-team reasoning framework for Agent security testing.
+Pyromorphit is an **agent-first, human-in-the-loop red-team harness** for Agent security testing.
 
-It deliberately does **not** send prompts to the target system. Instead, it helps a human tester iterate through:
+The project intentionally does **not** own the LLM control loop and does not require a fixed LLM API integration. It is designed to be opened by an agentic runtime such as Codex or OpenCode. The Agent is the semantic glue; Pyromorphit supplies skills, state, evidence, tools and invariants.
 
 ```text
-Skill -> Objective -> Strategy -> Prompt -> Human executes -> Feedback -> Score -> Analyze -> Next strategy
+Agent runtime (Codex / OpenCode / compatible agent)
+        |
+        v
+     AGENTS.md
+        |
+        +--> Skills: testing knowledge and strategy
+        +--> Harness: deterministic state/evidence operations
+        +--> Human: execute prompts and return observations
+        |
+        v
+Observe -> Reason -> Tool/Human action -> Observe -> Continue
 ```
 
-## Design principles
+## Core philosophy
 
-- **Objective is immutable**: the original test goal and success criteria are never rewritten by the LLM.
-- **Human is an executor, not a transport**: responses, notes, prompt edits, new-session actions and environment changes are first-class evidence.
-- **Every turn is auditable**: prompts, target responses, operator actions, evaluations and strategy decisions are appended to a session archive.
-- **LLM as glue**: strategist, prompt-writer, judge and analyst are separate logical roles and can share one model provider.
-- **No Target abstraction in v0**: no automatic send/receive, no concurrency, no protocol adapters.
+- **Agent owns control flow**: no Python orchestrator calls an LLM to decide the next step.
+- **Code provides capabilities, not workflows**: deterministic operations are exposed as small harness/tool capabilities.
+- **Skills provide strategy, not hard-coded pipelines**: skills guide the Agent without forcing a fixed sequence.
+- **Harness owns invariants**: immutable objectives, append-only evidence, session identity, turn relationships and audit history are not delegated to free-form model behavior.
+- **Preserve raw before normalize**: target responses, operator notes and tool output are retained verbatim before interpretation.
+- **Human is a first-class executor**: manual testing, new conversations, edits, retries and environment changes are explicit observations.
+- **Everything important should be resumable**: the session archive is the durable source of truth, not chat history alone.
 
-## Quick start
+## Current scope
 
-Requires Python 3.11+.
+The first version focuses on the manual red-team loop:
 
-```bash
-python -m pyromorphit.cli --skill prompt_injection
+```text
+Skill + immutable objective
+          |
+          v
+Agent chooses strategy and generates a test prompt
+          |
+          v
+Human executes it against any target system
+          |
+          v
+Human returns response + notes + actions
+          |
+          v
+Agent evaluates evidence and chooses the next action
 ```
 
-By default the CLI uses a deterministic mock provider so the workflow can be explored without any API key.
+There is deliberately no Target abstraction, transport normalizer, automatic send/response loop, concurrency engine, or built-in LLM provider.
 
-Use an OpenAI-compatible endpoint:
+## Repository shape
 
-```bash
-export PYROMORPHIT_LLM_PROVIDER=openai-compatible
-export PYROMORPHIT_LLM_BASE_URL=https://your-endpoint/v1
-export PYROMORPHIT_LLM_API_KEY=...
-export PYROMORPHIT_LLM_MODEL=...
-python -m pyromorphit.cli --skill prompt_injection
+```text
+Pyromorphit/
+├── AGENTS.md                  # Agent operating contract
+├── skills/                    # Red-team knowledge and strategy
+│   └── prompt_injection/
+│       ├── SKILL.md
+│       └── strategies.json
+├── pyromorphit/               # Thin deterministic harness library
+│   ├── models.py
+│   ├── harness.py
+│   ├── recorder.py
+│   └── skills.py
+├── docs/
+│   └── AGENTIC_REFACTOR_PENDING.md
+└── tests/
 ```
 
 ## Session archive
 
-Each run creates:
+Each test session uses an append-oriented archive:
 
 ```text
 test-report-{session-id}/
 ├── session.json
+├── events.jsonl
 ├── tree.json
 ├── summary.md
 └── turns/
@@ -54,8 +88,8 @@ test-report-{session-id}/
         └── analysis.md
 ```
 
-The archive is append-oriented and preserves the original human-provided content.
+The raw target response and human-provided information should never be overwritten by later summaries.
 
-## Current scope
+## Status
 
-v0 focuses on the manual red-team loop. Automatic target adapters, parallel campaigns and transport normalization are intentionally out of scope for now.
+Pyromorphit is currently an experimental harness design. The broader methodology for converting conventional automation/workflow projects into agent-friendly harnesses is intentionally tracked as a pending design topic in `docs/AGENTIC_REFACTOR_PENDING.md`.
