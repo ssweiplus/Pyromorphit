@@ -4,13 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyromorphit"
-version = "0.1.0"
-description = "Human-in-the-loop red-team reasoning framework for Agent security testing"
+version = "0.2.0"
+description = "Agent-first human-in-the-loop red-team harness"
 requires-python = ">=3.11"
 dependencies = []
-
-[project.scripts]
-pyromorphit = "pyromorphit.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["pyromorphit*"]
