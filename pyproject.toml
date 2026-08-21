@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyromorphit"
+version = "0.1.0"
+description = "An agentified orchestration layer for PyRIT following the Palingen methodology."
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+    "pyrit @ git+https://github.com/microsoft/PyRIT.git@f10086d45b1301b6d591a3abb3f9a0d090b6fb6c",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pyromorphit = ["skills/*.md"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
