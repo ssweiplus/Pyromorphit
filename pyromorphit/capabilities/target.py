@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Coroutine, TypeVar
 
 from pyromorphit.capabilities.catalog import CatalogCapability, to_jsonable
 from pyromorphit.model import ActionRecord, ActionRequest, ExecutionResult
+
+T = TypeVar("T")
+
+
+def run_async(coro: Coroutine[Any, Any, T]) -> T:
+    """Run a PyRIT coroutine from normal agent/tool code, even if a loop already exists."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 @dataclass(frozen=True)
@@ -64,7 +78,6 @@ class TargetCapability:
         human_authorized: bool = False,
     ) -> TargetHandle:
         """Instantiate a PyRIT target from data, not user-authored Python."""
-        holder: dict[str, Any] = {}
         request = ActionRequest(
             capability="pyrit_target",
             operation="target.create",
@@ -77,7 +90,6 @@ class TargetCapability:
             registry = self._registry()
             instance = registry.create_instance(type_name, **parameters)
             registry.instances.register(instance, name=name, metadata={"created_by": "pyromorphit"})
-            holder["instance"] = instance
             if persist_definition:
                 self._write_private_json(
                     self._definition_path(name),
@@ -109,8 +121,8 @@ class TargetCapability:
         registry.instances.register(instance, name=name, metadata={"restored_by": "pyromorphit"})
         return instance
 
-    async def send(self, *, name: str, prompt: str, human_authorized: bool = False) -> ActionRecord:
-        """Send one prompt through an already-defined target and capture the raw PyRIT response."""
+    def send(self, *, name: str, prompt: str, human_authorized: bool = False) -> ActionRecord:
+        """Send one prompt through a named target; callers do not construct PyRIT Message objects."""
         if not prompt:
             raise ValueError("prompt must not be empty")
         request = ActionRequest(
@@ -121,7 +133,7 @@ class TargetCapability:
             metadata={"target_name": name},
         )
 
-        async def runner() -> ExecutionResult:
+        def runner() -> ExecutionResult:
             try:
                 from pyrit.models import Message, MessagePiece
             except ImportError as exc:  # pragma: no cover
@@ -132,8 +144,8 @@ class TargetCapability:
                     MessagePiece(role="user", original_value=prompt, original_value_data_type="text")
                 ]
             )
-            response = await target.send_prompt_async(message=message)
+            response = run_async(target.send_prompt_async(message=message))
             body = json.dumps(to_jsonable(response), ensure_ascii=False).encode("utf-8")
             return ExecutionResult(command=("pyrit_target", "send", name), returncode=0, stdout=body, stderr=b"")
 
-        return await self.harness.execute_async(request=request, runner=runner)
+        return self.harness.execute(request=request, runner=runner)
