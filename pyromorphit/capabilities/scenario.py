@@ -6,7 +6,7 @@ import json
 from typing import Any, Sequence
 
 from pyromorphit.capabilities.catalog import CatalogCapability, to_jsonable
-from pyromorphit.capabilities.target import TargetCapability
+from pyromorphit.capabilities.target import TargetCapability, run_async
 from pyromorphit.model import ActionRecord, ActionRequest, ExecutionResult
 
 
@@ -28,7 +28,7 @@ class ScenarioCapability:
     def describe_type(self, name: str) -> dict[str, Any]:
         return self.catalog.describe("scenario", name)
 
-    async def run(
+    def run(
         self,
         *,
         name: str,
@@ -60,15 +60,18 @@ class ScenarioCapability:
             },
         )
 
-        async def runner() -> ExecutionResult:
-            registry = self._registry()
-            scenario = await registry.create_and_initialize_async(
-                name,
-                scenario_params=dict(scenario_params or {}),
-                scenario_result_id=scenario_result_id,
-                **effective_run_params,
-            )
-            result = await scenario.run_async()
+        def runner() -> ExecutionResult:
+            async def execute() -> Any:
+                registry = self._registry()
+                scenario = await registry.create_and_initialize_async(
+                    name,
+                    scenario_params=dict(scenario_params or {}),
+                    scenario_result_id=scenario_result_id,
+                    **effective_run_params,
+                )
+                return await scenario.run_async()
+
+            result = run_async(execute())
             body = json.dumps(to_jsonable(result), ensure_ascii=False).encode("utf-8")
             return ExecutionResult(
                 command=("pyrit_scenario", "run", name, target),
@@ -77,4 +80,4 @@ class ScenarioCapability:
                 stderr=b"",
             )
 
-        return await self.harness.execute_async(request=request, runner=runner)
+        return self.harness.execute(request=request, runner=runner)
