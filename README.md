@@ -35,9 +35,62 @@ See:
 
 - `docs/RESPONSIBILITY_MAP.md` — what stays, moves, and owns truth.
 - `docs/ARCHITECTURE.md` — target form and migration slice.
+- `docs/VALIDATION.md` — validation scope, evidence, and deferred environment checks.
 - `skills/pyromorphit/SKILL.md` — reusable strategy for a host Agent.
 
-## Planned user surface
+## Install
+
+Python 3.10–3.14 is supported by this slice, matching the current PyRIT range.
+
+```bash
+python -m pip install -e ".[pyrit]"
+```
+
+The `pyrit` extra is pinned to the upstream PyRIT commit used during this transformation so the first slice has a reproducible execution contract.
+
+## Minimal execution surface
+
+The CLI below is primarily for a host Agent, automation, debugging, and recovery. It is not intended to become another user-operated workflow engine.
+
+Create a durable run:
+
+```bash
+pyromorphit --workspace .pyromorphit start \
+  --objective "Assess the authorized target for prompt-injection weaknesses" \
+  --max-concurrency 1
+```
+
+Use the returned `run_id` for deterministic PyRIT operations:
+
+```bash
+pyromorphit --workspace .pyromorphit exec --run-id <RUN_ID> -- \
+  list-targets --start-server
+
+pyromorphit --workspace .pyromorphit exec --run-id <RUN_ID> -- \
+  run airt.cyber --target openai_chat --techniques single_turn --start-server
+```
+
+For `run`, Pyromorphit injects the run's concurrency ceiling when `--max-concurrency` is omitted. An explicit value above the Harness policy is rejected before process execution.
+
+Inspect durable facts and evidence references:
+
+```bash
+pyromorphit --workspace .pyromorphit status --run-id <RUN_ID>
+```
+
+Record human action, correction, context, instruction, and authorization together when needed:
+
+```bash
+pyromorphit --workspace .pyromorphit note --run-id <RUN_ID> \
+  --action-taken "logged in again" \
+  --context "the old session cannot be resumed" \
+  --correction "the token was valid; the server ended the session" \
+  --instruction "continue from the current page"
+```
+
+Raw stdout/stderr artifacts are stored below `.pyromorphit/runs/<RUN_ID>/artifacts/`; `events.jsonl` keeps the append-only execution journal. Agent interpretation should reference these facts rather than replace them.
+
+## Intended Agent surface
 
 A user should be able to say things such as:
 
