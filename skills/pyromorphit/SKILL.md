@@ -2,9 +2,13 @@
 
 ## Purpose
 
-Use PyRIT as a deterministic AI-security capability layer while the host Agent owns semantic testing strategy, interpretation, adaptation, and composition.
+Use PyRIT as the deterministic AI-security implementation layer while the host Agent owns semantic testing strategy, interpretation, adaptation, and composition.
 
-The human should be able to state goals, constraints, corrections, and changed direction in domain language. Do not make the human operate PyRIT/Palingen internals unless they ask for them.
+A core product constraint is:
+
+> The human should not have to write Target/HTTP/Scenario access code merely to use PyRIT.
+
+The human should be able to state goals, paste/describe an authorized interface, add constraints/corrections, and change direction in domain language.
 
 ## Responsibility boundaries
 
@@ -15,21 +19,69 @@ Human
 Host Agent
   owns semantic choice, interpretation, composition, adaptation
 
+Pyromorphit capabilities
+  own stable access plumbing at useful boundaries:
+  Catalog / HTTP Target / Target / Scenario / CLI escape hatch
+
 Pyromorphit Harness
   owns execution facts, evidence, permissions, resource ceilings, recovery
 
 PyRIT
-  owns deterministic targets, scenarios, attacks, converters, scorers, memory,
-  backend/CLI execution contracts
+  owns deterministic implementations:
+  targets, scenarios, attacks, converters, scorers, memory, backend contracts
 ```
 
 This Skill provides strategy and recovery knowledge. It does **not** own execution truth, authorization, concurrency ceilings, or PyRIT lifecycle invariants.
+
+## Do not push access code onto the human
+
+Before suggesting that the human write Python, a custom `PromptTarget`, `httpx` code, a Scenario constructor, or CLI assembly, check the promoted capability surface first.
+
+Prefer:
+
+```text
+CatalogCapability        -> discover available component contracts
+HTTPTargetCapability     -> raw HTTP request -> named PyRIT HTTPTarget
+TargetCapability         -> create / restore / send
+ScenarioCapability       -> describe / run / resume
+PyRITCLI                 -> escape hatch only when no promoted capability fits
+```
+
+A stable execution contract belongs in deterministic capability code, not in repeated human-authored glue.
+
+## HTTP target intake
+
+For an ordinary HTTP endpoint without a dedicated PyRIT target, prefer PyRIT's native `HTTPTarget` through `HTTPTargetCapability`.
+
+Ask the human only for information the Agent cannot infer safely, for example:
+
+- an authorized raw request copied from Burp/devtools;
+- where the model prompt belongs if it is not obvious;
+- whether authentication must be refreshed manually;
+- scope/side-effect constraints.
+
+The normal input form is a raw request containing `{PROMPT}` at the model-input position. The human should not have to write request-send code or a `PromptTarget` subclass.
+
+Target definitions can contain cookies/tokens and are sensitive run state. Do not print them into summaries or ordinary action metadata. Prefer environment placeholders or re-authentication when that is operationally appropriate.
+
+## Capability discovery
+
+Do not assume registry names or parameter contracts when PyRIT can describe them.
+
+Use catalog discovery for:
+
+- `target`
+- `scenario`
+- `converter`
+- `scorer`
+
+Use `describe` before inventing constructor parameters or forcing the human to look through source code.
 
 ## Operating posture
 
 Prefer autonomous + reviewable execution.
 
-Routine discovery, bounded test execution, result inspection, and low-risk adaptation do not need repeated human approval when they remain inside the declared objective and Harness policy.
+Routine discovery, bounded target definition, bounded send, result inspection, and low-risk adaptation do not need repeated human approval when they remain inside the declared objective and Harness policy.
 
 Block for the human only when authority, irreversibility, important evidence deficiency, or human-only capability requires it. Typical examples are re-authentication that should remain manual, a materially expanded target scope, or a high-impact operation that the Harness marks as requiring authorization.
 
@@ -41,20 +93,6 @@ Treat the run objective and human constraints in the Harness as authoritative.
 
 A technique's local goal, a scorer explanation, or a late-round hypothesis must not silently replace the original testing objective. When adapting strategy, re-anchor the proposed next action to the original objective and current human corrections.
 
-## Capability discovery
-
-Do not assume catalog names when the current PyRIT instance can tell you.
-
-Use PyRIT discovery capabilities such as:
-
-- `list-scenarios`
-- `list-targets`
-- `list-converters`
-- `list-initializers`
-- scenario history/results inspection
-
-Prefer an existing PyRIT capability over writing new adapter code.
-
 ## Strategy selection heuristics
 
 Choose the least complicated capability that can produce meaningful evidence for the current objective.
@@ -62,19 +100,30 @@ Choose the least complicated capability that can produce meaningful evidence for
 Useful considerations include:
 
 - whether the target is single-turn or multi-turn;
+- whether a direct Target send is enough before a full Scenario;
 - whether a baseline/direct attempt is valuable before transformations;
 - whether a converter changes representation while preserving the intended semantic test;
 - whether the target has rate/concurrency limitations;
 - whether previous evidence shows refusal, transport failure, authentication failure, parsing failure, or genuine resistance;
 - whether an intermediate result is independently useful enough to inspect, branch from, or hand to the human.
 
-Do not convert these considerations into a rigid global sequence.
+These are heuristics, not a mandatory numbered workflow.
+
+## Target vs Scenario boundary
+
+Use Target capabilities when the useful unit is direct interaction with one configured endpoint.
+
+Use Scenario capabilities when PyRIT already owns a meaningful testing campaign/technique lifecycle.
+
+Do not force a Scenario when one direct send answers the current question, and do not manually reproduce a Scenario's deterministic internals with a sequence of Target sends.
 
 ## Concurrency and resource behavior
 
 Default concurrency is 1.
 
 The Harness enforces the configured ceiling. Do not raise concurrency simply for speed when target session semantics, rate limits, or statefulness are uncertain.
+
+`ScenarioCapability` injects the Harness concurrency ceiling rather than requiring the human to remember the matching PyRIT parameter.
 
 ## Evidence and interpretation
 
@@ -94,10 +143,11 @@ The default human view should summarize meaningful status and evidence without d
 
 A failed action is not automatically a failed run.
 
-Use preserved evidence to identify the smallest failed boundary. Prefer changing only that boundary rather than restarting everything.
+Use preserved evidence and declarative target definitions to identify the smallest failed boundary. Prefer changing only that boundary rather than restarting everything.
 
 Distinguish failures such as:
 
+- target definition/parameter mismatch;
 - backend unavailable;
 - target transport error;
 - authentication/session expiry;
@@ -109,16 +159,18 @@ Distinguish failures such as:
 
 Do not blindly repeat an identical action when the evidence already explains why it failed.
 
-## Target integration and contract friction
+## Contract friction
 
-Treat stable transport, syntax, schema, and lifecycle mechanics as deterministic code/target behavior whenever practical.
+Treat stable transport, syntax, schema, and lifecycle mechanics as deterministic capability behavior whenever practical.
 
 Examples:
 
 ```text
-HTTP/SSE/WebSocket transport       -> deterministic target/adapter
-JSON/request envelope              -> deterministic code
-token/session factual state        -> Harness/target fact
+raw HTTP -> HTTPTarget             -> HTTP capability
+Target constructor parameters      -> Target capability + catalog
+PyRIT Message construction         -> Target capability
+Scenario init parameters           -> Scenario capability + catalog
+token/session factual state        -> Harness/Target fact
 meaning of irregular output        -> Agent interpretation
 choice of recovery strategy        -> Agent
 human-only login/credential action -> Human
@@ -127,11 +179,11 @@ human-only login/credential action -> Human
 Use the lowest-cost resolution:
 
 ```text
-remove -> standardize -> encode -> small deterministic adapter
+remove -> standardize -> encode -> capability/lubricant
        -> Agent mediation -> Human escalation
 ```
 
-Do not create a new custom target merely because an existing target requires configuration. Do create one when the execution contract itself is genuinely target-specific and reusable.
+Do not confuse "keep stable PyRIT implementation coarse" with "make the human call a coarse interface manually." Expose a smaller access capability when that removes repeated human glue.
 
 ## Human intervention
 
